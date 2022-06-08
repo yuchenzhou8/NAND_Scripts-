@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "mtd-user.h": "c",
+        "mtd-abi.h": "c"
+    }
+}

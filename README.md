@@ -1,2 +1,2 @@
-# NAND_Scripts-
+# NAND_Scripts
 NAND Flash Erase/Dump/Write in the userspace
