@@ -212,22 +212,14 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
     unsigned int blockstart;
     unsigned int limit = 0;
     int cnt = -1;
-    int size = 0;
+    int size_written = 0;
     int ret = 0;
     int offset = mtd_offset;
- 
-    //fopen input file
-    FILE *pf = fopen(file_name, "r");
-    if (pf==NULL) {
-        printf("fopen %s failed!\n", file_name);
-        return -1;
-    }
- 
+  
     //open mtd device
     int fd = open(device_name, O_WRONLY);
     if (fd < 0) {
         printf("open %s failed!\n", device_name);
-        fclose(pf);
         return -1;
     }
  
@@ -235,7 +227,6 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
     ret = ioctl(fd, MEMGETINFO, &meminfo);
     if (ret < 0) {
         printf("get MEMGETINFO failed!\n");
-        fclose(pf);
         close(fd);
         return -1;
     }
@@ -245,7 +236,6 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
     //check offset page aligned
     if (offset & (meminfo.writesize - 1)) {
         printf("start address is not page aligned");
-        fclose(pf);
         close(fd);
         return -1;
     }
@@ -254,7 +244,6 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
     char *tmp = (char *)malloc(meminfo.writesize);
     if (tmp == NULL) {
         printf("malloc %d size buffer failed!\n", meminfo.writesize);
-        fclose(pf);
         close(fd);
         return -1;
     }
@@ -277,7 +266,6 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
  
             if (offset >= limit) {
                 printf("offset(%d) over limit(%d)\n", offset, limit);
-                fclose(pf);
                 close(fd);
                 free(tmp);
                 return -1;
@@ -285,22 +273,18 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
         }
  
         lseek(fd, offset, SEEK_SET);
- 
-        cnt = fread(tmp, 1, meminfo.writesize, pf);
-        if (cnt == 0) {
-            printf("write ok!\n");
-            break;
-        }
+
+        cnt = size < meminfo.writesize? size: meminfo.writesize;
+        memcpy(tmp, data, cnt);
  
         if (cnt < meminfo.writesize) {
             /* zero pad to end of write block */
             memset(tmp + cnt, 0, meminfo.writesize - cnt);
         }
  
-        size = write(fd, tmp, meminfo.writesize);
-        if (size != meminfo.writesize) {
-            printf("write err, need :%d, real :%d\n", meminfo.writesize, size );
-            fclose(pf);
+        size_written = write(fd, tmp, meminfo.writesize);
+        if (size_written != meminfo.writesize) {
+            printf("write err, need :%d, real :%d\n", meminfo.writesize, size_written);
             close(fd);
             free(tmp);
             return -1;
@@ -316,7 +300,6 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
  
     //free buf
     free(tmp);
-    fclose(pf);
     close(fd);
  
     return 0;//test
@@ -324,6 +307,6 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
 }
 
 
-int nand_dump(const char *device_name, void * data, int32_t size, const int mtd_offset){
+int nand_dump(const char *device_name, void * buffer, int32_t size, const int mtd_offset){
     return 0;
 }
