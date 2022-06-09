@@ -232,6 +232,7 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
     }
  
     limit = meminfo.size;
+    printf("limit: %d bytes", limit);
  
     //check offset page aligned
     if (offset & (meminfo.writesize - 1)) {
@@ -308,5 +309,112 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
 
 
 int nand_dump(const char *device_name, void * buffer, int32_t size, const int mtd_offset){
+    
+    mtd_info_t meminfo;
+    unsigned int blockstart;
+    unsigned int limit = 0;
+    int cnt = -1;
+    int size_read = 0; 
+    int ret = 0;
+    int offset = mtd_offset;
+    int size_copy = 0;
+    uint8_t *local_ptr = (uint8_t *)buffer;
+
+    //open mtd device
+    int fd = open(device_name, O_WRONLY);
+    if(fd < 0)
+    {        
+        printf("open %s failed!\n", device_name);
+        return -1;
+    }
+
+ 
+    //get meminfo
+    ret = ioctl(fd, MEMGETINFO, &meminfo);
+    if (ret < 0) {
+        printf("get MEMGETINFO failed!\n");
+        close(fd);
+        return -1;
+    }
+
+    limit = meminfo.size;
+    printf("limit: %d bytes", limit);
+
+    //check offset page aligned
+    if (offset & (meminfo.writesize - 1)) {
+        printf("start address is not page aligned");
+        close(fd);
+        return -1;
+    }
+
+    //if offset in a bad block, stop read
+    blockstart = offset & ~(meminfo.erasesize - 1);
+
+    if(blockstart >= limit)
+    {
+        printf("not enough space in MTD device");
+        return -1;
+    }
+
+    if (ioctl(fd, MEMGETBADBLOCK, &blockstart) == 0)
+    {
+        printf("bad block at 0x%08x, dump failed\n", blockstart);
+        return -1;
+    }
+
+
+    //malloc buffer for read 
+    char *temp_space = (char *)malloc(meminfo.writesize);
+    if (temp_space == NULL) {
+        printf("malloc %d size buffer failed!\n", meminfo.writesize);
+        close(fd);
+        return -1;
+    }
+
+
+    /* dump process */
+    while(offset < limit)
+    {
+        blockstart = offset & ~(meminfo.erasesize - 1);
+        if (blockstart == offset) {
+            offset = next_good_eraseblock(fd, &meminfo, blockstart);
+            printf("reading from block at 0x%08x\n", offset);
+ 
+            if (offset >= limit) {
+                printf("offset(%d) over limit(%d)\n", offset, limit);
+                close(fd);
+                free(temp_space);
+                return -1;
+            }
+        }
+
+        lseek(fd, offset, SEEK_SET);
+
+        /* read one page at one time */
+        size_read = read(fd, temp_space, meminfo.writesize);
+        if (size_read != meminfo.writesize) 
+        {
+            printf("read err, need :%d, real :%d\n", meminfo.writesize, size );
+            close(fd);
+            free(temp_space);
+            return -1;
+        }
+
+        /* copy read page into the RAM buffer */
+        size_copy = size > meminfo.writesize? meminfo.writesize: size;
+        memcpy(local_ptr, temp_space, size_copy);
+        local_ptr += size_copy;
+        size -= size_copy;
+        
+        if(size <= 0)
+        {
+            printf("read done!\n");
+        }
+
+    }
+    
+    free(temp_space);
+    close(fd);
+    
     return 0;
 }

@@ -1,8 +1,8 @@
 #include "nand.h"
 
 /* mtd device */
-#define nand_data_dev "/dev/mtd2"
-#define nand_flash_offset 0
+#define NAND_DATA_DEV "/dev/mtd2"
+#define NAND_FLASH_OFFSET 0
 
 /* Option definitions */
 enum type_option{
@@ -40,6 +40,7 @@ int main(int argc, char const *argv[])
     }
 
     process_options(argc, argv);
+    int32_t status  = 0;
     
     if(type == NAND_WRITE)
     {
@@ -50,17 +51,27 @@ int main(int argc, char const *argv[])
         ptest->num_launch_state++;
         ptest->crc_check = compute_crc((const void *)ptest, sizeof(int16_t)*2, 0);
 
-        nand_write(nand_data_dev, (const void *)ptest, sizeof(GENSAT_1_cFS_preserved_data), nand_flash_offset); 
+        status = nand_write(NAND_DATA_DEV, (const void *)ptest, sizeof(GENSAT_1_cFS_preserved_data), NAND_FLASH_OFFSET); 
         printf("NAND_WRITE\n");
     }
     else if(type == NAND_DUMP)
     {
-        nand_dump(nand_data_dev,);
+        status = nand_dump(NAND_DATA_DEV, ptest, sizeof(GENSAT_1_cFS_preserved_data), NAND_FLASH_OFFSET);
+
+        if(status == 0)
+        {
+            uint16_t crc_local = compute_crc((const void *)ptest, sizeof(int16_t)*2, 0);
+            if(crc_local != ptest->crc_check)
+            {
+                printf("miss match crc!\n");
+            }
+            printf("deploy_state %d, num_launch_state %d\n", ptest->deploy_state, ptest->num_launch_state);
+        }
         printf("NAND_DUMP\n");
     }
     else if(type == NAND_ERASE)
     {
-        nand_erase(nand_data_dev, nand_flash_offset, sizeof(GENSAT_1_cFS_preserved_data));
+        status = nand_erase(NAND_DATA_DEV, NAND_FLASH_OFFSET, sizeof(GENSAT_1_cFS_preserved_data));
         printf("NAND_ERASE\n");
     }
     else
