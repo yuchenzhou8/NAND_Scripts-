@@ -107,7 +107,7 @@ int nand_write_file(const char *device_name, const char *file_name, const int mt
     }
  
     //open mtd device
-    int fd = open(device_name, O_WRONLY);
+    int fd = open(device_name, O_RDWR);
     if (fd < 0) {
         printf("open %s failed!\n", device_name);
         fclose(pf);
@@ -217,7 +217,7 @@ int nand_write(const char *device_name, void * data, int32_t size, const int mtd
     int offset = mtd_offset;
   
     //open mtd device
-    int fd = open(device_name, O_WRONLY);
+    int fd = open(device_name, O_RDWR);
     if (fd < 0) {
         printf("open %s failed!\n", device_name);
         return -1;
@@ -321,7 +321,7 @@ int nand_dump(const char *device_name, void * buffer, int32_t size, const int mt
     uint8_t *local_ptr = (uint8_t *)buffer;
 
     //open mtd device
-    int fd = open(device_name, O_WRONLY);
+    int fd = open(device_name, O_RDWR);
     if(fd < 0)
     {        
         printf("open %s failed!\n", device_name);
@@ -356,7 +356,9 @@ int nand_dump(const char *device_name, void * buffer, int32_t size, const int mt
         return -1;
     }
 
-    if (ioctl(fd, MEMGETBADBLOCK, &blockstart) == 0)
+
+    /* ioctl returned 1 => "bad block" */
+    if (ioctl(fd, MEMGETBADBLOCK, &blockstart) == -1)
     {
         printf("bad block at 0x%08x, dump failed\n", blockstart);
         return -1;
@@ -392,9 +394,16 @@ int nand_dump(const char *device_name, void * buffer, int32_t size, const int mt
 
         /* read one page at one time */
         size_read = read(fd, temp_space, meminfo.writesize);
+
+        // if(size_read < 0)
+        // {
+        //     printf("read err, need %d, return %d\n",)
+        // }
+
+
         if (size_read != meminfo.writesize) 
         {
-            printf("read err, need :%d, real :%d\n", meminfo.writesize, size );
+            printf("read err, need :%d, real :%d\n", meminfo.writesize, size_read);
             close(fd);
             free(temp_space);
             return -1;
@@ -409,6 +418,7 @@ int nand_dump(const char *device_name, void * buffer, int32_t size, const int mt
         if(size <= 0)
         {
             printf("read done!\n");
+            break;
         }
 
     }
