@@ -1,14 +1,15 @@
 #include "nand.h"
 
 /* mtd device */
-#define NAND_DATA_DEV "/dev/mtd2"
-#define NAND_FLASH_OFFSET 0
+#define NAND_DATA_DEV       "/dev/mtd2"
+#define NAND_FLASH_OFFSET   0
 
 /* Option definitions */
 enum type_option{
     NAND_WRITE,
     NAND_DUMP,
-    NAND_ERASE
+    NAND_ERASE,
+    NAND_UPDATE
 };
 
 static void process_options(int argc, char const *argv[]);
@@ -17,16 +18,19 @@ static uint16_t compute_crc(const void *DataPtr, uint16_t DataLength, uint16_t I
 /* Options */
 static int8_t type = -1; /* type to execute write/erase/dump */
 
+/* Example GENSAT-1 Info to Save */
 typedef struct _GENSAT_1_cFS_preserved_data_
 {
-    int16_t     deploy_state;
-    int16_t     num_launch_state;
-    uint16_t    crc_check;
-    int16_t     spare;
+    int16_t     deploy_state;               /* Deployment Status of GENSAT-1, just a boolean variable */
+    int16_t     num_launch_state;           /* Number of cFS launched */
+    uint16_t    crc_check;                  /* CRC Check */
+    int16_t     spare;                      /* 4-bytes Alignment */
 }GENSAT_1_cFS_preserved_data;
 
 
+/* Test data */
 GENSAT_1_cFS_preserved_data test = {0, 0, 0, 0};
+/* Pointer to test structure */
 GENSAT_1_cFS_preserved_data * ptest = &test;
 
 
@@ -34,8 +38,8 @@ int main(int argc, char const *argv[])
 {
     if(argc != 3)
     {
-        printf("Usage: .exe -t {w|d|e}\n");      
-        printf("Usage: .exe -type {write|dump|erase}\n");
+        printf("Usage: .exe -t {w|d|e|u}\n");      
+        printf("Usage: .exe -type {write|dump|erase|update}\n");
         exit(EXIT_FAILURE);
     }
 
@@ -50,6 +54,7 @@ int main(int argc, char const *argv[])
         }
         ptest->num_launch_state++;
         ptest->crc_check = compute_crc((const void *)ptest, sizeof(int16_t)*2, 0);
+        ptest->spare = 0;
 
         status = nand_write(NAND_DATA_DEV, (const void *)ptest, sizeof(GENSAT_1_cFS_preserved_data), NAND_FLASH_OFFSET); 
         printf("NAND_WRITE\n");
@@ -73,6 +78,78 @@ int main(int argc, char const *argv[])
     {
         status = nand_erase(NAND_DATA_DEV, NAND_FLASH_OFFSET, sizeof(GENSAT_1_cFS_preserved_data));
         printf("NAND_ERASE\n");
+    }
+    /* update the test structure */
+    else if(type == NAND_UPDATE)
+    {
+        /* First step: Dump and verify the NAND data */
+        status = nand_dump(NAND_DATA_DEV, ptest, sizeof(GENSAT_1_cFS_preserved_data), NAND_FLASH_OFFSET);
+
+        if(status == 0)
+        {
+
+            /* Check if the NAND Flash is used*/
+
+            if(ptest->deploy_state == 0xFF || ptest->num_launch_state == 0xFF || ptest->crc_check == 0xFF || ptest->spare == 0xFF)
+            {
+                printf("First Launch of cFS, initialize NAND data!\n");
+                ptest->deploy_state = 0;
+                ptest->num_launch_state = 1;
+                ptest->crc_check = compute_crc((const void *)ptest, sizeof(int16_t)*2, 0);
+                ptest->spare = 0;
+                printf("deploy_state %d, num_launch_state %d\n", ptest->deploy_state, ptest->num_launch_state);
+            }
+            else
+            {
+                uint16_t crc_local = compute_crc((const void *)ptest, sizeof(int16_t)*2, 0);
+
+                if(crc_local != ptest->crc_check)
+                {
+                    printf("Miss Match CRC!\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                /* Update NAND Flash */
+                if(ptest->deploy_state == 0)
+                {
+                    ptest->deploy_state = 1;
+                }
+                ptest->num_launch_state++;
+                ptest->crc_check = compute_crc((const void *)ptest, sizeof(int16_t)*2, 0);
+                ptest->spare = 0;
+
+                printf("deploy_state %d, num_launch_state %d\n", ptest->deploy_state, ptest->num_launch_state);
+            }
+
+            /* Erase the NAND flash block so we can write to it*/
+            status = nand_erase(NAND_DATA_DEV, NAND_FLASH_OFFSET, sizeof(GENSAT_1_cFS_preserved_data));
+
+            if(status == 0)
+            {
+                status = nand_write(NAND_DATA_DEV, (const void *)ptest, sizeof(GENSAT_1_cFS_preserved_data), NAND_FLASH_OFFSET); 
+
+                if(status == 0)
+                {
+                    printf("NAND_UPDATE: NAND_WRITE success\n");
+                }
+                else
+                {
+                    printf("NAND_UPDATE: NAND_WRITE failed\n");
+                }
+            }
+            else
+            {
+                printf("NAND_UPDATE: NAND_ERASE failed to Erase\n");
+            }
+
+        }
+        else
+        {
+            printf("NAND_UPDATE: failed to dump NAND data, exit!\n");
+            exit(EXIT_FAILURE);
+        }
+
+
     }
     else
         perror("Invalid NAND Operation\n");
@@ -178,8 +255,10 @@ static void process_options(int argc, char const *argv[])
                         type = NAND_DUMP;
                     else if(!strcmp("erase",optarg))
                         type = NAND_ERASE;
+                    else if(!strcmp("update",optarg))
+                        type = NAND_UPDATE;
                     else{
-                        fprintf(stderr, "ERROR: \"%s\" is not among {write|dump|erase}\n", (char*)optarg);
+                        fprintf(stderr, "ERROR: \"%s\" is not among {write|dump|erase|update}\n", (char*)optarg);
                         run = false;
                     }
                 }
@@ -198,8 +277,10 @@ static void process_options(int argc, char const *argv[])
                 type = NAND_DUMP;
             else if(!strcmp("e",optarg))
                 type = NAND_ERASE;
+            else if(!strcmp("u",optarg))
+                type = NAND_UPDATE;
             else{
-                fprintf(stderr, "ERROR: \"%s\" is not among {w|d|e}\n", optarg);
+                fprintf(stderr, "ERROR: \"%s\" is not among {w|d|e|u}\n", optarg);
                 run = false;
             }
             break;

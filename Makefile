@@ -1,5 +1,6 @@
 CC=gcc
 ARM_CC=arm-linux-gnueabi-gcc
+CFLAG=-w
 
 
 all: nand nand_arm
