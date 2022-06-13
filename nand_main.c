@@ -159,7 +159,7 @@ int main(int argc, char const *argv[])
 }
 
 
-static uint16_t compute_crc(const void *DataPtr, uint16_t DataLength, uint16_t InputCRC)
+static uint16_t compute_crc(void *DataPtr, uint16_t DataLength, uint16_t InputCRC)
 {
     uint32_t  i;
     int16_t  Index;
