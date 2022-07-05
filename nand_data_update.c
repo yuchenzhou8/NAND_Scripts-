@@ -13,10 +13,10 @@
 /* Example GENSAT-1 Info to Save */
 typedef struct _GENSAT_1_cFS_preserved_data_
 {
-    int16_t     antenna_deployment_state;                   /* Deployment Status of GENSAT-1, just a boolean variable */
-    int16_t     boom_deployment_state;                      /* Deployment Status of GENSAT-1, just a boolean variable */
-    int16_t     num_launch_state;                           /* Number of cFS launched */
     uint16_t    crc_check;                                  /* CRC Check */
+    int16_t     num_launch_state;                           /* Number of cFS launched */
+    int32_t     antenna_deployment_state;                   /* Deployment Status of GENSAT-1, just a boolean variable */
+    int32_t     boom_deployment_state;                      /* Deployment Status of GENSAT-1, just a boolean variable */
 }GENSAT_1_cFS_preserved_data;
 
 
@@ -59,7 +59,7 @@ int main(int argc, char const *argv[])
             ptest->antenna_deployment_state = 0;
             ptest->boom_deployment_state = 0;
             ptest->num_launch_state = 1;
-            ptest->crc_check = compute_crc(ptest, 3*sizeof(int16_t), 0);
+            ptest->crc_check = compute_crc(&ptest->num_launch_state , 5*sizeof(int16_t), 0);
         }
         /* update the data */
         else if(fd_stat.st_size == sizeof(GENSAT_1_cFS_preserved_data))
